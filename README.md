@@ -21,10 +21,13 @@ use Psr\Http\Server\RequestHandlerInterface as RequestHandler;
 
 require 'vendor/autoload.php';
 
-$app = new \Slim\App([
-    /* Supply a custom callable resolver, which resolves PSR-15 middlewares. */
-    'callableResolver' => new \Bnf\Slim3Psr15\CallableResolver,
-]);
+$app = new \Slim\App();
+
+$container = $app->getContainer();
+/* Supply a custom callable resolver, which resolves PSR-15 middlewares. */
+$container['callableResolver'] = function ($container) {
+    return new \Bnf\Slim3Psr15\CallableResolver($container);
+};
 
 /* Add a PSR-15 middleware */
 $app->add(new class implements Middleware {
