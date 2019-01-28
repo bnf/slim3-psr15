@@ -5,7 +5,7 @@
 It's recommended that you use [Composer](https://getcomposer.org/).
 
 ```bash
-$ composer require bnf/slim3-psr15 "^1.0"
+$ composer require bnf/slim3-psr15 "^1.1"
 ```
 
 ## Usage
@@ -38,12 +38,16 @@ $app->add(new class implements Middleware {
     }
 });
 
-$app->get('/hello/{name}', function (Request $request, Response $response, array $args) {
-    $msg = $request->getAttribute('msg');
-    $name = $args['name'];
-    $response->getBody()->write("$msg, $name");
+$app->get('/hello/{name}', new class implements RequestHandler {
+    public function handle(Request $request): Response {
+        $args = $request->getAttributes('arguments');
+        $msg = $request->getAttribute('msg');
+        $name = $args['name'];
+        $response = new \Slim\Http\Response;
+        $response->getBody()->write("$msg, $name");
 
-    return $response;
+        return $response;
+    }
 });
 $app->run();
 ```

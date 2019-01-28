@@ -11,6 +11,7 @@ namespace Bnf\Slim3Psr15;
 use Bnf\Slim3Psr15\Adapter\PsrMiddleware;
 use Psr\Container\ContainerInterface;
 use Psr\Http\Server\MiddlewareInterface;
+use Psr\Http\Server\RequestHandlerInterface;
 use RuntimeException;
 use Slim\Interfaces\CallableResolverInterface;
 
@@ -53,6 +54,10 @@ final class CallableResolver implements CallableResolverInterface
             return new PsrMiddleware($toResolve);
         }
 
+        if ($toResolve instanceof RequestHandlerInterface) {
+            return [$toResolve, 'handle'];
+        }
+
         if (is_callable($toResolve)) {
             if ($toResolve instanceof \Closure && $this->container instanceof ContainerInterface) {
                 return $toResolve->bindTo($this->container);
@@ -84,6 +89,10 @@ final class CallableResolver implements CallableResolverInterface
 
             if ($resolveMiddleware && $method === null && $instance instanceof MiddlewareInterface) {
                 return new PsrMiddleware($instance);
+            }
+
+            if ($method === null && $instance instanceof RequestHandlerInterface) {
+                return [$instance, 'handle'];
             }
 
             $resolved = [$instance, $method ?: '__invoke'];
