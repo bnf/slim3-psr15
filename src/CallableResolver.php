@@ -49,20 +49,26 @@ final class CallableResolver implements CallableResolverInterface
      */
     public function resolve($toResolve, $resolveMiddleware = true)
     {
-        $resolved = $toResolve;
-
         if ($resolveMiddleware && $toResolve instanceof MiddlewareInterface) {
             return new PsrMiddleware($toResolve);
         }
 
-        if (!is_callable($toResolve) && is_string($toResolve)) {
+        if (is_callable($toResolve)) {
+            if ($toResolve instanceof \Closure && $this->container instanceof ContainerInterface) {
+                return $toResolve->bindTo($this->container);
+            }
+            return $toResolve;
+        }
+
+        $resolved = $toResolve;
+        if (is_string($toResolve)) {
             $class = $toResolve;
             $method = null;
             $instance = null;
 
             // check for slim callable as "class:method"
             $callablePattern = '!^([^\:]+)\:([a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*)$!';
-            if (preg_match($callablePattern, $toResolve, $matches)) {
+            if (preg_match($callablePattern, $toResolve, $matches) === 1) {
                 $class = $matches[1];
                 $method = $matches[2];
             }
@@ -88,10 +94,6 @@ final class CallableResolver implements CallableResolverInterface
                 '%s is not resolvable',
                 is_array($toResolve) || is_object($toResolve) ? json_encode($toResolve) : $toResolve
             ));
-        }
-
-        if ($this->container instanceof ContainerInterface && $resolved instanceof \Closure) {
-            $resolved = $resolved->bindTo($this->container);
         }
 
         return $resolved;
