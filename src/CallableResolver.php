@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * Slim Framework (https://slimframework.com)
  *
@@ -35,76 +37,84 @@ final class CallableResolver implements CallableResolverInterface
     }
 
     /**
-     * Resolve toResolve into a callable that that the router can dispatch.
+     * Resolve toResolve into a callable that the router can dispatch.
      *
      * If toResolve is of the format 'class:method', then try to extract 'class'
      * from the container otherwise instantiate it and then dispatch 'method'.
      *
      * @param mixed $toResolve
-     * @param bool  $resolveMiddleware
      *
      * @return callable
      *
      * @throws RuntimeException if the callable does not exist
      * @throws RuntimeException if the callable is not resolvable
+     * @throws RuntimeException if the argument does not reference a callable
      */
-    public function resolve($toResolve, $resolveMiddleware = true)
+    public function resolve($toResolve)
     {
-        if ($resolveMiddleware && $toResolve instanceof MiddlewareInterface) {
-            return new PsrMiddleware($toResolve);
-        }
-
-        if ($toResolve instanceof RequestHandlerInterface) {
-            return [$toResolve, 'handle'];
+        if (is_object($toResolve)) {
+            return $this->resolveFromObject($toResolve);
         }
 
         if (is_callable($toResolve)) {
-            if ($toResolve instanceof \Closure && $this->container instanceof ContainerInterface) {
-                return $toResolve->bindTo($this->container);
-            }
             return $toResolve;
         }
 
-        $resolved = $toResolve;
         if (is_string($toResolve)) {
-            $class = $toResolve;
-            $method = null;
-            $instance = null;
-
             // check for slim callable as "class:method"
             $callablePattern = '!^([^\:]+)\:([a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*)$!';
             if (preg_match($callablePattern, $toResolve, $matches) === 1) {
                 $class = $matches[1];
                 $method = $matches[2];
+                return $this->resolve([$this->get($class), $method]);
             }
-
-            if ($this->container instanceof ContainerInterface && $this->container->has($class)) {
-                $instance = $this->container->get($class);
-            } else {
-                if (!class_exists($class)) {
-                    throw new RuntimeException(sprintf('Callable %s does not exist', $class));
-                }
-                $instance = new $class($this->container);
-            }
-
-            if ($resolveMiddleware && $method === null && $instance instanceof MiddlewareInterface) {
-                return new PsrMiddleware($instance);
-            }
-
-            if ($method === null && $instance instanceof RequestHandlerInterface) {
-                return [$instance, 'handle'];
-            }
-
-            $resolved = [$instance, $method ?: '__invoke'];
+            return $this->resolve($this->get($toResolve));
         }
 
-        if (!is_callable($resolved)) {
-            throw new RuntimeException(sprintf(
-                '%s is not resolvable',
-                is_array($toResolve) || is_object($toResolve) ? json_encode($toResolve) : $toResolve
-            ));
+        throw new RuntimeException(sprintf('%s is not resolvable', json_encode($toResolve)));
+    }
+
+    /**
+     * @param mixed $object
+     * @return callable
+     */
+    private function resolveFromObject(object $object): callable
+    {
+        if ($object instanceof MiddlewareInterface) {
+            return new PsrMiddleware($object);
         }
 
-        return $resolved;
+        if ($object instanceof RequestHandlerInterface) {
+            return [$object, 'handle'];
+        }
+
+        if ($object instanceof \Closure) {
+            // @todo shouldn't we explicitly bind `null` in case the container is `null`?
+            // (blocker: currently some tests rely on non-overwritten binding when container is null)
+            return $this->container === null ? $object : $object->bindTo($this->container);
+        }
+
+        if (is_callable($object)) {
+            return $object;
+        }
+
+        throw new RuntimeException(sprintf('%s is not callable', json_encode($object)));
+    }
+
+    /**
+     * @param string $class
+     * @return mixed
+     */
+    private function get(string $class)
+    {
+        if ($this->container !== null && $this->container->has($class)) {
+            return $this->container->get($class);
+        }
+
+        if (class_exists($class)) {
+            return new $class($this->container);
+        }
+
+        throw new RuntimeException(sprintf('Callable %s does not exist', $class));
     }
 }
