@@ -40,9 +40,8 @@ $app->add(new class implements Middleware {
 
 $app->get('/hello/{name}', new class implements RequestHandler {
     public function handle(Request $request): Response {
-        $args = $request->getAttributes('arguments');
+        $name = $request->getAttribute('name');
         $msg = $request->getAttribute('msg');
-        $name = $args['name'];
         $response = new \Slim\Http\Response;
         $response->getBody()->write("$msg, $name");
 
